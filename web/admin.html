@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0b1020">
+<title>Quiz · Painel</title>
+<script src="config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#0b1020;--card:rgba(255,255,255,.06);--line:rgba(255,255,255,.12);--txt:#f4f6ff;--mut:#a5afd0;--a:#7c5cff;--b:#22d3ee;--ok:#34d399;--warn:#fbbf24;--err:#fb7185}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px 16px 60px;min-height:100vh}
+.bg{position:fixed;inset:0;z-index:-1;overflow:hidden}
+.bg i{position:absolute;width:44vmax;height:44vmax;border-radius:50%;filter:blur(100px);opacity:.3;animation:float 20s ease-in-out infinite}
+.bg i:nth-child(1){background:var(--a);top:-16vmax;left:-10vmax}
+.bg i:nth-child(2){background:var(--b);bottom:-18vmax;right:-12vmax;animation-delay:-8s}
+@keyframes float{0%,100%{transform:translate(0,0)}50%{transform:translate(5vmax,3vmax) scale(1.1)}}
+.wrap{max-width:1020px;margin:0 auto}
+header{text-align:center;padding:18px 0 8px}
+h1{margin:0;font-size:clamp(1.5rem,5vw,2.1rem);background:linear-gradient(90deg,#fff,#c4b5fd 50%,#67e8f9);-webkit-background-clip:text;background-clip:text;color:transparent}
+.live{display:inline-flex;align-items:center;gap:8px;margin-top:10px;padding:6px 14px;border-radius:99px;background:rgba(255,255,255,.07);border:1px solid var(--line);font-size:.82rem;color:var(--mut)}
+.live i{width:9px;height:9px;border-radius:50%;background:var(--ok);animation:pulse 1.6s infinite;color:var(--ok)}
+.live.off i{background:var(--err);color:var(--err);animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 currentColor}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.tabs{display:flex;justify-content:center;gap:8px;margin:20px 0;flex-wrap:wrap}
+.tab{padding:11px 22px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--mut);cursor:pointer;font:inherit;font-weight:600;transition:.2s}
+.tab:hover{color:var(--txt);transform:translateY(-2px)}
+.tab.on{background:linear-gradient(110deg,var(--a),var(--b));color:#fff;border-color:transparent;box-shadow:0 10px 26px rgba(124,92,255,.4)}
+.pane{animation:fade .35s both}
+@keyframes fade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px;margin-bottom:18px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);overflow-x:auto}
+.card h2{margin:0 0 14px;font-size:1.05rem;text-align:center}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:18px}
+.kpi{text-align:center;padding:18px 10px;border-radius:18px;background:var(--card);border:1px solid var(--line);transition:.2s;animation:fade .5s both}
+.kpi:hover{transform:translateY(-4px);border-color:rgba(255,255,255,.3)}
+.kpi:nth-child(2){animation-delay:.07s}.kpi:nth-child(3){animation-delay:.14s}.kpi:nth-child(4){animation-delay:.21s}
+.kpi b{display:block;font-size:2.1rem;font-variant-numeric:tabular-nums}
+.kpi span{font-size:.75rem;color:var(--mut);text-transform:uppercase;letter-spacing:.07em}
+.kpi.g b{color:var(--ok)}.kpi.y b{color:var(--warn)}.kpi.c b{color:var(--b)}.kpi.p b{color:#c4b5fd}
+
+/* pódio */
+.podium{display:flex;justify-content:center;align-items:flex-end;gap:12px;margin:8px 0 6px;min-height:210px}
+.pod{flex:1;max-width:190px;text-align:center;animation:rise .8s cubic-bezier(.2,.9,.3,1.1) both}
+.pod:nth-child(1){animation-delay:.15s}.pod:nth-child(2){animation-delay:0s}.pod:nth-child(3){animation-delay:.3s}
+@keyframes rise{from{opacity:0;transform:translateY(50px)}to{opacity:1;transform:none}}
+.pod .av{font-size:2rem;margin-bottom:4px}
+.pod .nm{font-weight:700;font-size:.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pod .sc{font-size:.8rem;color:var(--mut);margin-bottom:6px;font-variant-numeric:tabular-nums}
+.pod .bar{border-radius:14px 14px 0 0;display:grid;place-items:center;font-size:1.9rem;font-weight:800;color:rgba(255,255,255,.9)}
+.pod.r1 .bar{height:130px;background:linear-gradient(180deg,#fbbf24,#b45309)}
+.pod.r2 .bar{height:96px;background:linear-gradient(180deg,#cbd5e1,#64748b)}
+.pod.r3 .bar{height:68px;background:linear-gradient(180deg,#fb923c,#9a3412)}
+.pod.r1 .av{animation:bob 2s ease-in-out infinite}
+.locgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:18px;margin-bottom:0}
+.locgrid .card{margin-bottom:0;animation:fade .5s both}
+.locgrid .card:nth-child(2){animation-delay:.08s}.locgrid .card:nth-child(3){animation-delay:.16s}.locgrid .card:nth-child(4){animation-delay:.24s}
+.locgrid .card h2 small{display:block;font-weight:400;color:var(--mut);font-size:.78rem;margin-top:2px}
+.locgrid .podium{min-height:200px}
+.locgrid{margin-bottom:18px}
+.chips{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.chips button{padding:7px 14px;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--mut);cursor:pointer;font:inherit;font-size:.84rem;transition:.2s}
+.chips button:hover{color:var(--txt)}
+.chips button.on{background:linear-gradient(110deg,var(--a),var(--b));color:#fff;border-color:transparent}
+.tag{display:inline-block;padding:3px 10px;border-radius:99px;background:rgba(124,92,255,.18);color:#c4b5fd;font-size:.8rem;font-weight:600}
+@keyframes bob{50%{transform:translateY(-8px)}}
+
+table{width:100%;border-collapse:collapse;font-size:.93rem}
+th,td{padding:11px 8px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}
+th{color:var(--mut);font-weight:600;font-size:.74rem;text-transform:uppercase;letter-spacing:.06em}
+td.l,th.l{text-align:left}
+tbody tr{transition:.2s;animation:fade .4s both}
+tbody tr:hover{background:rgba(255,255,255,.06)}
+.pill{display:inline-block;padding:3px 11px;border-radius:99px;font-weight:700;font-size:.85rem;background:rgba(52,211,153,.15);color:var(--ok)}
+.pbar{height:7px;border-radius:99px;background:rgba(255,255,255,.1);overflow:hidden;min-width:90px}
+.pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--a),var(--b));transition:width .6s}
+.empty{text-align:center;color:var(--mut);padding:22px 0;font-size:.92rem}
+.btn{padding:9px 16px;border-radius:11px;border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--txt);cursor:pointer;font:inherit;font-size:.88rem;transition:.2s}
+.btn:hover{background:rgba(255,255,255,.14);transform:translateY(-1px)}
+.btn.p{background:linear-gradient(110deg,var(--a),var(--b));border-color:transparent;font-weight:700;color:#fff;box-shadow:0 8px 22px rgba(124,92,255,.35)}
+.btn.d{color:var(--err);border-color:rgba(251,113,133,.35)}
+.btn.d:hover{background:rgba(251,113,133,.15)}
+.btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.det td{white-space:normal;text-align:left;background:rgba(0,0,0,.2)}
+.det div{padding:5px 0;font-size:.88rem}
+.ok{color:var(--ok)}.er{color:var(--err)}
+
+/* upload */
+.drop{border:2px dashed var(--line);border-radius:18px;padding:34px 16px;text-align:center;cursor:pointer;transition:.2s;color:var(--mut)}
+.drop:hover,.drop.over{border-color:var(--b);background:rgba(34,211,238,.07);color:var(--txt);transform:scale(1.01)}
+.drop b{display:block;font-size:2.2rem;margin-bottom:6px}
+.sheets{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:14px 0}
+.sheets label{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.05);cursor:pointer;font-size:.88rem}
+.row{display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:12px}
+.sub{color:var(--mut);font-size:.88rem;text-align:center;margin:0 0 12px}
+select,input[type=number]{padding:10px 12px;border-radius:11px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--txt);font:inherit;text-align:center}
+select option{background:#111830}
+input[type=number]{width:90px}
+.qrow td:nth-child(1){white-space:normal;text-align:left;min-width:200px}
+.qrow td.w{white-space:normal;color:var(--mut);font-size:.85rem}
+code{background:rgba(0,0,0,.35);padding:6px 12px;border-radius:9px;word-break:break-all;font-size:.9rem}
+.lbl{display:block;color:var(--mut);font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.center{text-align:center}
+/* switch */
+.sw{position:relative;display:inline-flex;align-items:center;gap:12px;cursor:pointer;user-select:none}
+.sw input{display:none}
+.sw s{width:52px;height:30px;border-radius:99px;background:rgba(255,255,255,.15);position:relative;transition:.25s;text-decoration:none}
+.sw s::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.25s}
+.sw input:checked+s{background:var(--ok)}
+.sw input:checked+s::after{left:25px}
+/* toast e modal */
+#toasts{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:100;align-items:center}
+.toast{padding:12px 20px;border-radius:14px;background:#1a2342;border:1px solid var(--line);box-shadow:0 14px 36px rgba(0,0,0,.5);animation:fade .3s both;font-size:.92rem}
+.toast.ok{border-color:var(--ok)}.toast.er{border-color:var(--err)}
+.modal{position:fixed;inset:0;background:rgba(5,8,18,.7);backdrop-filter:blur(4px);display:grid;place-items:center;z-index:90;padding:16px;animation:fade .2s both}
+.modal div{background:#141b36;border:1px solid var(--line);border-radius:20px;padding:26px;max-width:380px;text-align:center}
+.modal p{margin:0 0 20px;line-height:1.5}
+.hide{display:none!important}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<div class="bg"><i></i><i></i></div>
+<div class="wrap">
+  <header>
+    <h1>🏆 Quiz · Painel</h1>
+    <div class="live" id="live"><i></i><span id="upd">conectando…</span></div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab on" data-t="res">📊 Resultados</button>
+    <button class="tab" data-t="per">📝 Perguntas</button>
+    <button class="tab" data-t="cfg">⚙️ Configurações</button>
+  </div>
+
+  <div id="res" class="pane">
+    <div class="kpis">
+      <div class="kpi p"><b id="k_tot">0</b><span>Participantes</span></div>
+      <div class="kpi g"><b id="k_fin">0</b><span>Finalizaram</span></div>
+      <div class="kpi y"><b id="k_prog">0</b><span>Em andamento</span></div>
+      <div class="kpi c"><b id="k_q">0</b><span>Perguntas no banco</span></div>
+    </div>
+    <div class="locgrid" id="podiums"></div>
+    <div class="card"><h2>Ranking completo</h2>
+      <div class="chips" id="chips"></div>
+      <table><thead><tr><th>#</th><th class="l">Nome</th><th>Local</th><th>Matrícula</th><th>Acertos</th><th>Pontos</th><th>Tempo</th><th></th></tr></thead><tbody id="rank"></tbody></table>
+      <div class="empty" id="rankEmpty">Ninguém finalizou ainda.</div>
+    </div>
+    <div class="card"><h2>⏳ Em andamento</h2>
+      <table><thead><tr><th class="l">Nome</th><th>Local</th><th>Matrícula</th><th>Progresso</th><th></th></tr></thead><tbody id="prog"></tbody></table>
+      <div class="empty" id="progEmpty">Ninguém respondendo agora.</div>
+    </div>
+  </div>
+
+  <div id="per" class="pane hide">
+    <div class="card">
+      <h2>📥 Importar planilha</h2>
+      <p class="sub">Colunas: Pergunta · Resposta correta · Opção errada 1, 2, 3… (quantas precisar)</p>
+      <div class="drop" id="drop"><b>📄</b>Clique ou arraste a planilha aqui (.xlsx, .xls, .csv)</div>
+      <input type="file" id="file" accept=".xlsx,.xls,.csv" class="hide">
+      <div id="sheets" class="sheets"></div>
+      <div id="preview" class="sub"></div>
+      <div class="row">
+        <select id="mode"><option value="replace">Substituir perguntas atuais</option><option value="append">Adicionar às atuais</option></select>
+        <button class="btn p" id="doImport" disabled>Importar perguntas</button>
+      </div>
+    </div>
+    <div class="card"><h2 id="qcount">Perguntas cadastradas</h2>
+      <table><thead><tr><th class="l">Pergunta</th><th>Correta</th><th>Erradas</th><th></th></tr></thead><tbody id="qlist"></tbody></table>
+      <div class="empty hide" id="qEmpty">Nenhuma pergunta ainda. Importe uma planilha acima.</div>
+    </div>
+  </div>
+
+  <div id="cfg" class="pane hide">
+    <div class="card center">
+      <span class="lbl">Link do quiz para os participantes</span>
+      <p><code id="qlink"></code></p>
+      <div class="row"><button class="btn p" id="copy">📋 Copiar link</button></div>
+    </div>
+    <div class="card center">
+      <h2>Controle do quiz</h2>
+      <label class="sw"><input type="checkbox" id="active"><s></s><span id="activeTxt">Quiz aberto</span></label>
+      <div class="row" style="margin-top:20px"><label class="lbl" style="margin:0">Perguntas por participante</label><input type="number" id="perq" min="1" max="50"><button class="btn p" id="saveCfg">Salvar</button></div>
+    </div>
+    <div class="card center">
+      <h2>Pontuação</h2>
+      <p class="sub">Cada acerto vale 1000 pontos, menos 40 por segundo gasto na pergunta, com mínimo de 100. Erro vale 0. Desempate: menor tempo total.</p>
+      <button class="btn d" id="resetAll">🗑 Apagar todos os participantes</button>
+    </div>
+  </div>
+</div>
+<div id="toasts"></div>
+
+<script>
+const CFG = window.QUIZ_CONFIG || {};
+const CONFIGURED = !!CFG.supabaseUrl && !/SEU-PROJETO/i.test(CFG.supabaseUrl);
+const API = String(CFG.supabaseUrl || "").replace(/\/+$/,"") + "/functions/v1/admin";
+const $ = id => document.getElementById(id);
+let KEY = "";
+try {
+  const m = location.hash.match(/k=([^&]+)/);
+  if (m){ localStorage.setItem("quiz_admin_key", decodeURIComponent(m[1])); history.replaceState(null,"",location.pathname); }
+  KEY = localStorage.getItem("quiz_admin_key") || "";
+} catch(e){}
+
+async function api(body){
+  const r = await fetch(API,{method:"POST",headers:{"Content-Type":"application/json","x-admin-key":KEY},body:JSON.stringify(body)});
+  const d = await r.json().catch(()=>({error:"Resposta inválida"}));
+  if (!r.ok) throw new Error(d.error || "Erro");
+  return d;
+}
+const fmt = ms => { if (ms==null) return "-"; const s=ms/1000; return String(Math.floor(s/60)).padStart(2,"0")+":"+(s%60).toFixed(1).padStart(4,"0"); };
+const td = (t,c) => { const e=document.createElement("td"); e.textContent=t; if(c) e.className=c; return e; };
+const mkbtn = (txt,cls,fn) => { const b=document.createElement("button"); b.className="btn "+cls; b.textContent=txt; b.onclick=fn; return b; };
+
+function toast(msg, kind){ const t=document.createElement("div"); t.className="toast "+(kind||"ok"); t.textContent=msg; $("toasts").append(t); setTimeout(()=>t.remove(),3200); }
+function ask(msg){ return new Promise(res=>{
+  const m=document.createElement("div"); m.className="modal";
+  const box=document.createElement("div"); const p=document.createElement("p"); p.textContent=msg;
+  const row=document.createElement("div"); row.style.cssText="display:flex;gap:10px;justify-content:center;padding:0;border:0;background:none";
+  const no=mkbtn("Cancelar","",()=>{m.remove();res(false)}), yes=mkbtn("Confirmar","d",()=>{m.remove();res(true)});
+  row.append(no,yes); box.append(p,row); m.append(box); document.body.append(m);
+});}
+function countTo(el,to){ const from=parseInt(el.textContent)||0; if(from===to) return; const t0=performance.now();
+  (function s(t){ const p=Math.min(1,(t-t0)/500); el.textContent=Math.round(from+(to-from)*p); if(p<1) requestAnimationFrame(s); })(t0); }
+
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===b));
+  for (const id of ["res","per","cfg"]){ const p=$(id); const on=id===b.dataset.t; p.classList.toggle("hide",!on); if(on){p.classList.remove("pane");void p.offsetWidth;p.classList.add("pane");} }
+  if (b.dataset.t==="per") loadQuestions();
+});
+
+const LOCAIS=[["Sede administrativa","🏢"],["Lote 1","🛣️"],["Lote 2","🛣️"],["Lote 3","🛣️"]];
+let lastCfg=null, lastData=null, filterLoc="";
+
+// 4 pódios, um por local (ordem visual: 2º, 1º, 3º)
+function renderPodiums(d){
+  const root=$("podiums");
+  if (!root.children.length){
+    LOCAIS.forEach(([n,ic])=>{
+      const c=document.createElement("div"); c.className="card"; c.dataset.loc=n;
+      const h=document.createElement("h2"); h.textContent=ic+" "+n; const sm=document.createElement("small"); h.append(sm);
+      const pd=document.createElement("div"); pd.className="podium";
+      const em=document.createElement("div"); em.className="empty"; em.textContent="Ninguém finalizou neste local ainda.";
+      c.append(h,pd,em); root.append(c);
+    });
+  }
+  [...root.children].forEach(c=>{
+    const list=d.ranking.filter(r=>r.local===c.dataset.loc);
+    const pd=c.querySelector(".podium"), em=c.querySelector(".empty");
+    c.querySelector("small").textContent=list.length+" finalizaram · "+d.in_progress.filter(r=>r.local===c.dataset.loc).length+" em andamento";
+    em.classList.toggle("hide", list.length>0);
+    const sig=JSON.stringify(list.slice(0,3).map(r=>[r.id,r.score]));
+    if (pd.dataset.sig===sig) return;
+    pd.dataset.sig=sig; pd.innerHTML="";
+    const av=["🥇","🥈","🥉"];
+    [1,0,2].forEach(i=>{ const r=list[i]; if(!r) return;
+      const e=document.createElement("div"); e.className="pod r"+(i+1);
+      const a=document.createElement("div"); a.className="av"; a.textContent=av[i];
+      const n=document.createElement("div"); n.className="nm"; n.textContent=r.nome;
+      const s=document.createElement("div"); s.className="sc"; s.textContent=r.score+" pts · "+fmt(r.total_time_ms);
+      const b=document.createElement("div"); b.className="bar"; b.textContent=i+1;
+      e.append(a,n,s,b); pd.append(e); });
+  });
+}
+function renderChips(){
+  const box=$("chips"); box.innerHTML="";
+  [["","Todos"],...LOCAIS.map(([n])=>[n,n])].forEach(([v,t])=>{
+    const b=document.createElement("button"); b.textContent=t; b.className=filterLoc===v?"on":"";
+    b.onclick=()=>{ filterLoc=v; loadDash(); };
+    box.append(b);
+  });
+}
+async function loadDash(){
+  if (!CONFIGURED){ $("live").classList.add("off"); $("upd").textContent="Configuração pendente: edite o config.js com a URL do Supabase"; return; }
+  try{
+    const d = await api({action:"dashboard"});
+    $("live").classList.remove("off");
+    $("upd").textContent = "Ao vivo · atualizado às " + new Date().toLocaleTimeString("pt-BR");
+    countTo($("k_tot"), d.ranking.length + d.in_progress.length); countTo($("k_fin"), d.ranking.length);
+    countTo($("k_prog"), d.in_progress.length); countTo($("k_q"), d.questions);
+
+    lastData=d;
+    renderPodiums(d);
+    renderChips();
+    const view = filterLoc ? d.ranking.filter(r=>r.local===filterLoc) : d.ranking;
+
+    const rk=$("rank"); rk.innerHTML="";
+    view.forEach((r,i)=>{
+      const tr=document.createElement("tr"); tr.style.animationDelay=(i*0.04)+"s";
+      const lt=document.createElement("td"); const tg=document.createElement("span"); tg.className="tag"; tg.textContent=r.local||"-"; lt.append(tg);
+      tr.append(td(i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1), td(r.nome,"l"), lt, td(r.matricula));
+      const ac=document.createElement("td"); const pill=document.createElement("span"); pill.className="pill"; pill.textContent=r.correct+"/"+r.total; ac.append(pill);
+      tr.append(ac, td(r.score), td(fmt(r.total_time_ms)));
+      const a=document.createElement("td");
+      a.append(mkbtn("Detalhes","",()=>detail(r,tr))," ",mkbtn("Excluir","d",()=>delP(r)));
+      tr.append(a); rk.append(tr);
+    });
+    $("rankEmpty").classList.toggle("hide", view.length>0);
+
+    const pg=$("prog"); pg.innerHTML="";
+    d.in_progress.forEach(r=>{
+      const tr=document.createElement("tr");
+      const lt2=document.createElement("td"); const tg2=document.createElement("span"); tg2.className="tag"; tg2.textContent=r.local||"-"; lt2.append(tg2);
+      tr.append(td(r.nome,"l"),lt2,td(r.matricula));
+      const c=document.createElement("td"); const bar=document.createElement("div"); bar.className="pbar"; const f=document.createElement("i"); f.style.width=(r.answered/r.total*100)+"%"; bar.append(f);
+      const lab=document.createElement("div"); lab.className="sub"; lab.style.margin="4px 0 0"; lab.textContent=r.answered+"/"+r.total; c.append(bar,lab);
+      const a=document.createElement("td"); a.append(mkbtn("Excluir","d",()=>delP(r)));
+      tr.append(c,a); pg.append(tr);
+    });
+    $("progEmpty").classList.toggle("hide", d.in_progress.length>0);
+
+    lastCfg=d.config;
+    if (document.activeElement!==$("perq")) $("perq").value=d.config.per_quiz;
+    $("active").checked=d.config.active; $("activeTxt").textContent=d.config.active?"Quiz aberto":"Quiz encerrado";
+  }catch(e){
+    $("live").classList.add("off");
+    $("upd").textContent = e.message==="Não autorizado." ? "Sem acesso: abra o link do painel com a chave" : "Sem conexão: " + e.message;
+  }
+}
+async function detail(r,tr){
+  const nxt=tr.nextElementSibling;
+  if (nxt && nxt.classList.contains("det")){ nxt.remove(); return; }
+  const d=await api({action:"detail",id:r.id});
+  const row=document.createElement("tr"); row.className="det";
+  const c=document.createElement("td"); c.colSpan=8;
+  d.answers.forEach(a=>{
+    const p=document.createElement("div");
+    p.textContent=`${a.position+1}. ${a.question_text} → ${a.chosen} ${a.is_correct?"✓":"✗ (correta: "+a.correct_text+")"} · ${a.points} pts · ${(a.elapsed_ms/1000).toFixed(1)}s`;
+    p.className=a.is_correct?"ok":"er"; c.append(p);
+  });
+  row.append(c); tr.after(row);
+}
+async function delP(r){
+  if (!(await ask(`Excluir ${r.nome} (${r.matricula})? A matrícula poderá responder novamente.`))) return;
+  await api({action:"delete_participant",id:r.id}); toast("Participante excluído"); loadDash();
+}
+
+async function loadQuestions(){
+  const d=await api({action:"questions"});
+  $("qcount").textContent=`Perguntas cadastradas (${d.questions.length})`;
+  const b=$("qlist"); b.innerHTML="";
+  d.questions.forEach((q,i)=>{
+    const tr=document.createElement("tr"); tr.className="qrow"; tr.style.animationDelay=(i*0.03)+"s";
+    tr.append(td(q.text),td(q.correct),td(q.wrongs.join(" | "),"w"));
+    const a=document.createElement("td");
+    a.append(mkbtn("Excluir","d",async()=>{ await api({action:"delete_question",id:q.id}); toast("Pergunta excluída"); loadQuestions(); loadDash(); }));
+    tr.append(a); b.append(tr);
+  });
+  $("qEmpty").classList.toggle("hide", d.questions.length>0);
+}
+
+let parsed={};
+async function readFile(f){
+  if(!f) return;
+  const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
+  parsed={}; $("sheets").innerHTML="";
+  wb.SheetNames.forEach(n=>{
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:""}).slice(1);
+    parsed[n]=rows.map(r=>({text:String(r[0]).trim(),correct:String(r[1]).trim(),wrongs:r.slice(2).map(x=>String(x).trim()).filter(Boolean)}))
+      .filter(r=>r.text&&r.correct&&r.wrongs.length>=1);
+    const l=document.createElement("label"); const c=document.createElement("input"); c.type="checkbox"; c.checked=true; c.dataset.s=n; c.onchange=upd;
+    l.append(c,document.createTextNode(n+" ("+parsed[n].length+")")); $("sheets").append(l);
+  });
+  $("drop").firstChild.nextSibling.textContent=f.name; upd();
+}
+function collect(){
+  const map=new Map();
+  document.querySelectorAll("#sheets input:checked").forEach(c=>{
+    parsed[c.dataset.s].forEach(r=>{ const k=r.text.toLowerCase(); const o=map.get(k); if(!o||r.wrongs.length>o.wrongs.length) map.set(k,r); });
+  });
+  return [...map.values()];
+}
+function upd(){ const r=collect(); $("preview").textContent=r.length?`${r.length} perguntas prontas para importar.`:"Nenhuma pergunta válida selecionada."; $("doImport").disabled=!r.length; }
+$("drop").onclick=()=>$("file").click();
+$("file").onchange=e=>readFile(e.target.files[0]);
+["dragenter","dragover"].forEach(ev=>$("drop").addEventListener(ev,e=>{e.preventDefault();$("drop").classList.add("over")}));
+["dragleave","drop"].forEach(ev=>$("drop").addEventListener(ev,e=>{e.preventDefault();$("drop").classList.remove("over")}));
+$("drop").addEventListener("drop",e=>readFile(e.dataTransfer.files[0]));
+$("doImport").onclick=async()=>{
+  const rows=collect(); $("doImport").disabled=true;
+  try{ const d=await api({action:"import",mode:$("mode").value,rows}); toast("✓ "+d.imported+" perguntas importadas"); loadQuestions(); loadDash(); }
+  catch(e){ toast(e.message,"er"); }
+  $("doImport").disabled=false;
+};
+
+$("qlink").textContent=location.origin+"/";
+$("copy").onclick=()=>{ navigator.clipboard.writeText(location.origin+"/"); toast("Link copiado!"); };
+$("active").onchange=async()=>{ $("activeTxt").textContent=$("active").checked?"Quiz aberto":"Quiz encerrado"; await api({action:"set_config",active:$("active").checked}); toast($("active").checked?"Quiz aberto":"Quiz encerrado"); };
+$("saveCfg").onclick=async()=>{ await api({action:"set_config",per_quiz:parseInt($("perq").value,10)}); toast("Configuração salva"); };
+$("resetAll").onclick=async()=>{ if(!(await ask("Apagar TODOS os participantes e resultados? Não dá para desfazer."))) return; await api({action:"reset_all"}); toast("Participantes apagados"); loadDash(); };
+
+loadDash(); setInterval(()=>{ if(!$("res").classList.contains("hide")) loadDash(); },4000);
+</script>
+</body>
+</html>

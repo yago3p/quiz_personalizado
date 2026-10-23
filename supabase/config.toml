@@ -1,0 +1,9 @@
+project_id = "quiz-interativo"
+
+# As funções são públicas (o navegador chama direto) e fazem a própria validação:
+# "quiz" usa token de sessão por participante, "admin" exige a chave do painel.
+[functions.quiz]
+verify_jwt = false
+
+[functions.admin]
+verify_jwt = false
